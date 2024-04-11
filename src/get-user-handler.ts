@@ -12,7 +12,8 @@ import {
 } from "@aws-sdk/client-cloudwatch";
 
 const logger = new Logger({ serviceName: "getUserHandler" });
-const cloudWatchClient = captureAWSv3Client(new CloudWatchClient({}));
+//
+const cloudWatchClient = createCwClient();
 
 const CW_METRIC_NAMESPACE = process.env.CW_METRIC_NAMESPACE!;
 const CW_METRIC_NAME = process.env.CW_METRIC_NAME!;
@@ -61,9 +62,30 @@ export const handler: APIGatewayProxyHandler = async (
   }
 };
 
+function createCwClient() {
+  let cloudWatchClient: CloudWatchClient | undefined;
+  const segment = getSegment()?.addNewSubsegment("createCwClient");
+  try {
+    cloudWatchClient = captureAWSv3Client(
+      new CloudWatchClient({
+        requestHandler: {
+          connectionTimeout: 1000,
+          requestTimeout: 5,
+        },
+        maxAttempts: 1,
+      })
+    );
+  } catch {
+    logger.warn("CloudWatchClientの初期化に失敗");
+  } finally {
+    segment?.close();
+  }
+  return cloudWatchClient;
+}
+
 const sendSuccessMetricsSampleService = async () => {
   try {
-    await cloudWatchClient.send(
+    await cloudWatchClient?.send(
       new PutMetricDataCommand({
         Namespace: CW_METRIC_NAMESPACE,
         MetricData: [
