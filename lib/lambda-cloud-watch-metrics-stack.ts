@@ -2,6 +2,8 @@ import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as cw from "aws-cdk-lib/aws-cloudwatch";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
 
@@ -10,10 +12,10 @@ export class LambdaCloudWatchMetricsStack extends cdk.Stack {
     super(scope, id, props);
 
     const apiLogGroup = new logs.LogGroup(this, "api-access-log-group", {
-      logGroupName: "/aws/apigateway/api-access-log",
+      logGroupName: `/aws/apigateway/${id}-api-access-log`,
     });
 
-    const api = new apigateway.RestApi(this, "base-api", {
+    const api = new apigateway.RestApi(this, `${id}-api`, {
       deploy: true,
       deployOptions: {
         tracingEnabled: true,
@@ -27,15 +29,36 @@ export class LambdaCloudWatchMetricsStack extends cdk.Stack {
       },
     });
 
-    const getUserLambda = new NodejsFunction(this, "get-user-lambda", {
+    const cloudWatchMetric = new cw.Metric({
+      namespace: "AWS/Lambda",
+      metricName: "RequestSuccessCount",
+      period: cdk.Duration.minutes(1),
+      dimensionsMap: {
+        Service: "SampleService",
+      },
+    });
+
+    const getUserLambda = new NodejsFunction(this, `${id}-get-user-lambda`, {
       entry: "src/get-user-handler.ts",
       handler: "handler",
       tracing: lambda.Tracing.ACTIVE,
+      memorySize: 1024,
       bundling: {
         externalModules: ["aws-sdk"],
         forceDockerBundling: false,
       },
+      environment: {
+        CW_METRIC_NAMESPACE: cloudWatchMetric.namespace,
+        CW_METRIC_NAME: cloudWatchMetric.metricName,
+      },
     });
+
+    iam.Grant.addToPrincipal({
+      grantee: getUserLambda,
+      actions: ["cloudwatch:PutMetricData"],
+      resourceArns: ["*"],
+    });
+
     const getUsersLambdaIntegration = new apigateway.LambdaIntegration(
       getUserLambda,
       {
