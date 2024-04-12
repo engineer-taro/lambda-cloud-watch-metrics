@@ -52,12 +52,7 @@ export class LambdaCloudWatchMetricsStack extends cdk.Stack {
         CW_METRIC_NAME: cloudWatchMetric.metricName,
       },
     });
-
-    iam.Grant.addToPrincipal({
-      grantee: getUserLambda,
-      actions: ["cloudwatch:PutMetricData"],
-      resourceArns: ["*"],
-    });
+    cw.Metric.grantPutMetricData(getUserLambda);
 
     const getUsersLambdaIntegration = new apigateway.LambdaIntegration(
       getUserLambda,
