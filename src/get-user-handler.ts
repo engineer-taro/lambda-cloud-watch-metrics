@@ -12,7 +12,6 @@ import {
 } from "@aws-sdk/client-cloudwatch";
 
 const logger = new Logger({ serviceName: "getUserHandler" });
-//
 const cloudWatchClient = createCwClient();
 
 const CW_METRIC_NAMESPACE = process.env.CW_METRIC_NAMESPACE!;
@@ -64,22 +63,21 @@ export const handler: APIGatewayProxyHandler = async (
 
 function createCwClient() {
   let cloudWatchClient: CloudWatchClient | undefined;
-  const segment = getSegment()?.addNewSubsegment("createCwClient");
+  logger.info("createCwClient START"); // XRayのセグメントがハンドラー外で取得できなかったためloggerで時間を計測するため呼び出す
   try {
     cloudWatchClient = captureAWSv3Client(
       new CloudWatchClient({
         requestHandler: {
           connectionTimeout: 1000,
-          requestTimeout: 5,
+          requestTimeout: 100,
         },
         maxAttempts: 1,
       })
     );
   } catch {
     logger.warn("CloudWatchClientの初期化に失敗");
-  } finally {
-    segment?.close();
   }
+  logger.info("createCwClient END");
   return cloudWatchClient;
 }
 
